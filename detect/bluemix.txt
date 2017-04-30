@@ -1,0 +1,5 @@
+{
+  "url": "https://stream.watsonplatform.net/speech-to-text/api",
+  "username": "4b01ef0b-1d88-4d81-8702-9e4d0c220322",
+  "password": "BLbpaO6ImMP2"
+}

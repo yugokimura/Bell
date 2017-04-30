@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+import socket
+import threading
+import thread
+import time
+import datetime
+import os
+from watson_developer_cloud import SpeechToTextV1
+from watson_developer_cloud import TextToSpeechV1
+import pyaudio
+import json
+import subprocess
+import re
+
+TOP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+RESOURCE_FILE = os.path.join(TOP_DIR, "resources/common.res")
+DETECT_DING = os.path.join(TOP_DIR, "resources/ding.wav")
+DETECT_DONG = os.path.join(TOP_DIR, "resources/dong.wav")
+DETECT_ANSW = os.path.join(TOP_DIR, "resources/answer.flac")
+DETECT_SORY = os.path.join(TOP_DIR, "resources/sorry.flac")
+
+HOST='127.0.0.1'
+PORT=50007
+INTERVAL=1
+
+status = { "result" : "" }
+
+class MyThread(threading.Thread):
+
+	def __init__(self):
+		super(MyThread, self).__init__()
+		self.setDaemon(True)
+
+	def run(self):
+		while True:
+			result = str(datetime.datetime.today())
+			print result
+			status["result"] = result
+			time.sleep(INTERVAL)
+
+class SubThread(threading.Thread):
+
+	def __init__(self):
+		super(SubThread, self).__init__()
+		self.setDaemon(True)
+
+	def run(self):
+		while True:
+			print "MONITORING"
+			time.sleep(2)
+
+def handler(conn, addr):
+	print addr
+	while True:
+		data = conn.recv(1024)
+		if not data:
+			break
+
+		subprocess.call("aplay test1.wav", shell=True)
+
+		STT = SpeechToTextV1( username = "4b01ef0b-1d88-4d81-8702-9e4d0c220322", password =  "BLbpaO6ImMP2", x_watson_learning_opt_out=False)
+		with open('test1.wav', 'rb') as audio_file:
+			r = STT.recognize(
+				audio_file,
+				model='ja-JP_NarrowbandModel',
+				content_type='audio/wav',
+				timestamps=True,
+				word_confidence=True
+			)
+
+		data = json.loads(json.dumps(r, indent=2))
+		try:
+			alt = data['results'][0]['alternatives']
+			mozi = ''
+			for item in alt:
+				mozi = item['transcript']
+				print item['transcript'] + "--"
+				break
+
+
+			TTS = TextToSpeechV1( username = "1ed123c6-5c8e-4fa7-a4f1-9462320767f3", password =  "1cHpBkgkbXfv", x_watson_learning_opt_out=False)
+
+			word = '理解できません。'
+
+			news = re.search('ニュース', mozi.encode('utf-8'))
+			if news :
+				word = '最新ニュースを読み上げます'
+			
+			tenki = re.search('天気', mozi.encode('utf-8'))
+			if tenki :
+				word = '最新の天気をお伝えします'
+
+
+			aniva20 = re.search('今日', mozi.encode('utf-8'))
+			if aniva20 :
+				word = '今日はグーの20周年です'			
+	
+	        	with open( DETECT_ANSW, 'wb') as audio_file:
+        	        	audio_file.write(TTS.synthesize(word, accept='audio/wav', voice="ja-JP_EmiVoice"))
+
+        		subprocess.call("aplay " + DETECT_ANSW, shell=True)
+
+			
+
+
+		except Exception as e:
+			print("error: %s" % (e))
+			subprocess.call("aplay "+DETECT_SORY, shell=True)
+			break
+
+
+		print "END PROCESS"
+
+		#print data
+		#conn.send(status['result'])
+	conn.close()
+	print "CLOSE"
+
+def socket_work():
+	
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	s.bind( (HOST, PORT) )
+	s.listen(1)
+
+	while True:
+		conn, addr = s.accept()
+		thread.start_new_thread(handler, (conn, addr))
+	s.close()
+
+if __name__ == '__main__':
+
+	mythread = MyThread()
+	mythread.start()
+
+	socket_work()
